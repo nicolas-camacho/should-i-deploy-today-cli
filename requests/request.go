@@ -8,8 +8,8 @@ import (
 )
 
 type Config struct {
-	Tzone string `default:"UTC"`
-	Date  string `default:""`
+	Tzone string
+	Date  string
 }
 
 type Response struct {
@@ -20,9 +20,10 @@ type Response struct {
 }
 
 func GetMessage(config Config) string {
-	URL := "https://shouldideploy.today/api" + "?tz=" + config.Tzone + "&date="
+	URL := "https://shouldideploy.today/api" + "?tz=" + config.Tzone
+
 	if config.Date != "" {
-		URL += config.Date
+		URL += "&date=" + config.Date
 	}
 
 	content, err := http.Get(URL)
