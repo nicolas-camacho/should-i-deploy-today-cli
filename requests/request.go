@@ -19,7 +19,7 @@ type Response struct {
 	Shouldideploy bool
 }
 
-func GetMessage(config Config) string {
+func GetMessage(config Config) (bool, string) {
 	URL := "https://shouldideploy.today/api" + "?tz=" + config.Tzone
 
 	if config.Date != "" {
@@ -28,22 +28,22 @@ func GetMessage(config Config) string {
 
 	content, err := http.Get(URL)
 	if err != nil {
-		return "Error: " + err.Error()
+		return false, "Error: " + err.Error()
 	}
 
 	body, err := io.ReadAll(content.Body)
 	if err != nil {
-		return "Error: " + err.Error()
+		return false, "Error: " + err.Error()
 	}
 
 	content.Body.Close()
 
 	if content.StatusCode > 299 {
-		return "The main request failed with status code: " + strconv.Itoa(content.StatusCode) + " and body: " + string(body)
+		return false, "The main request failed with status code: " + strconv.Itoa(content.StatusCode) + " and body: " + string(body)
 	}
 
 	var response Response
 	json.Unmarshal(body, &response)
 
-	return response.Message
+	return response.Shouldideploy, response.Message
 }
