@@ -20,13 +20,16 @@ func main() {
 
 	var style = lipgloss.NewStyle().
 		Bold(true).
-		PaddingLeft(4).
-		Width(20)
+		Width(len(message) + 4).
+		PaddingLeft(2).
+		PaddingTop(1).
+		PaddingBottom(1).
+		Foreground(lipgloss.Color("#FAFAFA"))
 
 	if shouldideploy {
-		style = style.Foreground(lipgloss.Color("#222831")).Background(lipgloss.Color("#FAFAFA"))
+		style = style.Background(lipgloss.Color("#16C47F"))
 	} else {
-		style = style.Foreground(lipgloss.Color("#FAFAFA")).Background(lipgloss.Color("#AF3E3E"))
+		style = style.Background(lipgloss.Color("#AF3E3E"))
 	}
 
 	fmt.Println(style.Render(message))
