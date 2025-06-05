@@ -28,6 +28,16 @@ type Response struct {
 	Shouldideploy bool
 }
 
+type errorResponse struct {
+	Message string
+	Code    int
+	Type    string
+}
+
+type badRequest struct {
+	Error errorResponse
+}
+
 type requestMessage string
 type requestError error
 type interactiveMode bool
@@ -49,13 +59,12 @@ func (t TimezoneListItem) FilterValue() string {
 }
 
 type model struct {
-	spinner     spinner.Model
-	config      Config
-	loading     bool
-	message     string
-	timezones   list.Model
-	successQuit bool
-	err         requestError
+	spinner   spinner.Model
+	config    Config
+	loading   bool
+	message   string
+	timezones list.Model
+	err       requestError
 }
 
 func initialModel(config Config) model {
@@ -108,6 +117,14 @@ func fetchMessage(config Config) tea.Cmd {
 		}
 
 		content.Body.Close()
+
+		if content.StatusCode == http.StatusBadRequest {
+			var badReq badRequest
+			if err := json.Unmarshal(body, &badReq); err != nil {
+				return requestError(fmt.Errorf("error parsing error response: %w", err))
+			}
+			return requestError(fmt.Errorf("%s (code: %d, type: %s)", badReq.Error.Message, badReq.Error.Code, badReq.Error.Type))
+		}
 
 		if content.StatusCode > 299 {
 			return requestError(fmt.Errorf("received non-2xx status code: %d, error: %s", content.StatusCode, string(body)))
@@ -162,18 +179,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			selectedItem := m.timezones.SelectedItem()
 			if item, ok := selectedItem.(TimezoneListItem); ok {
 				m.config.Tzone = item.Name
+				m.config.Interactive = false
 				m.loading = true
-				return m, tea.Batch(
-					tea.ClearScreen,
-					tea.ExitAltScreen,
-					m.spinner.Tick,
-					fetchMessage(m.config),
-				)
+				return m, tea.Quit
 			}
 		}
 	case requestMessage:
 		m.loading = false
-		m.successQuit = true
 		m.message = string(msg)
 		return m, tea.Quit
 	case requestError:
@@ -198,15 +210,9 @@ func (m model) View() string {
 	} else if m.config.Interactive {
 		return m.timezones.View()
 	} else if m.err != nil {
-		s += lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#AF3E3E")).
-			Bold(true).
-			Width(len(m.err.Error()) + 2).
-			PaddingLeft(2).
-			PaddingTop(1).
-			PaddingBottom(2).
-			Render(m.err.Error())
-	} else if m.successQuit {
+		os.Stderr.WriteString("Error: " + m.err.Error() + "\n")
+		os.Exit(1)
+	} else {
 		s += m.message
 	}
 
@@ -215,12 +221,15 @@ func (m model) View() string {
 
 func main() {
 	var config Config
+	var interactiveMode bool
 
 	flag.StringVar(&config.Tzone, "tz", "UTC", "Timezone to use")
 	flag.StringVar(&config.Date, "date", "", "Date to use")
-	flag.BoolVar(&config.Interactive, "i", false, "Run in interactive mode")
+	flag.BoolVar(&interactiveMode, "i", false, "Run in interactive mode")
 
 	flag.Parse()
+
+	config.Interactive = interactiveMode
 
 	var p *tea.Program
 
@@ -230,8 +239,18 @@ func main() {
 		p = tea.NewProgram(initialModel(config))
 	}
 
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+
+	if err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
+	}
+
+	if m, ok := finalModel.(model); ok && interactiveMode {
+		p = tea.NewProgram(m)
+		if _, err := p.Run(); err != nil {
+			fmt.Println("Error running program:", err)
+			os.Exit(1)
+		}
 	}
 }
